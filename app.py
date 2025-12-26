@@ -12,7 +12,7 @@ st.title("TRINEXA | Company Intelligence Hub")
 
 # 2. Secure API Connection (Using Streamlit Secrets)
 if "GROQ_API_KEY" in st.secrets:
-    client = Groq(api_key=st.secrets["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"])
+    client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 else:
     st.error("Missing GROQ_API_KEY! Add it to App Settings > Secrets.")
     st.stop()
@@ -72,4 +72,5 @@ if prompt := st.chat_input("Ask TRINEXA..."):
         
         response = st.write_stream(completion)
     st.session_state.messages.append({"role": "assistant", "content": response})
+
 
