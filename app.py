@@ -6,74 +6,67 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
 
-# 1. Professional Page Setup
-st.set_page_config(page_title="TRINEXA AI | Company Hub", layout="wide")
-st.title("TRINEXA AI - Internal Knowledge Engine")
-st.sidebar.title("Company Documents")
+# 1. UI Configuration
+st.set_page_config(page_title="TRINEXA AI", layout="wide")
+st.title("TRINEXA | Company Intelligence Hub")
 
-# Initialize Session States
+# 2. Secure API Connection (Using Streamlit Secrets)
+if "GROQ_API_KEY" in st.secrets:
+    client = Groq(api_key=st.secrets["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"])
+else:
+    st.error("Missing GROQ_API_KEY! Add it to App Settings > Secrets.")
+    st.stop()
+
+# 3. Persistent Memory
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "vector_db" not in st.session_state:
     st.session_state.vector_db = None
 
-# 2. Get API Key from Secrets
-try:
-    api_key = st.secrets["GROQ_API_KEY"]
-    client = Groq(api_key=api_key)
-except:
-    st.error("Missing GROQ_API_KEY in Secrets!")
-    st.stop()
+# 4. Sidebar: PDF Knowledge Upload
+with st.sidebar:
+    st.header("Upload Knowledge")
+    uploaded_file = st.file_uploader("Upload Company PDF", type="pdf")
+    
+    if uploaded_file and st.button("Train TRINEXA"):
+        with st.status("Reading document..."):
+            # Save temporary file for LangChain loader
+            with open("temp.pdf", "wb") as f:
+                f.write(uploaded_file.getbuffer())
+            
+            # Load and chunk the PDF
+            loader = PyPDFLoader("temp.pdf")
+            pages = loader.load()
+            text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+            docs = text_splitter.split_documents(pages)
+            
+            # Build Vector Database using free CPU embeddings
+            embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+            st.session_state.vector_db = FAISS.from_documents(docs, embeddings)
+            st.success("TRINEXA is now trained on this document!")
 
-# 3. PDF Uploader Section (In Sidebar)
-uploaded_file = st.sidebar.file_uploader("Upload Company PDF", type="pdf")
-
-if uploaded_file and st.sidebar.button("Process Document"):
-    with st.status("Reading document and building brain..."):
-        # Save temp file
-        with open("temp.pdf", "wb") as f:
-            f.write(uploaded_file.getbuffer())
-        
-        # Load and Split PDF into chunks
-        loader = PyPDFLoader("temp.pdf")
-        pages = loader.load()
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
-        docs = text_splitter.split_documents(pages)
-        
-        # Create Vector Database (This is the "Searchable Memory")
-        # We use a free embedding model that runs on Hugging Face CPU
-        embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-        st.session_state.vector_db = FAISS.from_documents(docs, embeddings)
-        st.sidebar.success("TRINEXA now knows this document!")
-
-# 4. Chat Interface
+# 5. Professional Chat Interface
 for msg in st.session_state.messages:
     st.chat_message(msg["role"]).write(msg["content"])
 
-if prompt := st.chat_input("Ask about company policies or generic questions..."):
+if prompt := st.chat_input("Ask TRINEXA..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     st.chat_message("user").write(prompt)
 
-    # 5. The "RAG" Logic (Searching the PDF)
+    # Retrieval: Pull context from the PDF if it exists
     context = ""
     if st.session_state.vector_db:
-        # Search the PDF for the 3 most relevant paragraphs
         search_results = st.session_state.vector_db.similarity_search(prompt, k=3)
         context = "\n".join([doc.page_content for doc in search_results])
 
-    # 6. Generate Response using DeepSeek-R1 (Better than ChatGPT Free)
+    # Generation: DeepSeek-R1 Reasoning
     with st.chat_message("assistant"):
-        full_prompt = f"""
-        You are TRINEXA. Use the following internal company context to answer the user. 
-        If the answer is not in the context, use your general intelligence to help.
-        
-        CONTEXT: {context}
-        USER QUESTION: {prompt}
-        """
+        system_prompt = f"Context: {context}\nYou are TRINEXA, a reasoning AI. Use the provided context to answer accurately."
         
         completion = client.chat.completions.create(
             model="deepseek-r1-distill-llama-70b",
-            messages=[{"role": "user", "content": full_prompt}],
+            messages=[{"role": "system", "content": system_prompt},
+                      {"role": "user", "content": prompt}],
             stream=True
         )
         
