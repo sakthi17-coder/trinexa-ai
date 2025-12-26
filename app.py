@@ -64,7 +64,7 @@ if prompt := st.chat_input("Ask TRINEXA..."):
         system_prompt = f"Context: {context}\nYou are TRINEXA, a reasoning AI. Use the provided context to answer accurately."
         
         completion = client.chat.completions.create(
-            model="deepseek-r1-distill-llama-70b",
+            model="llama-3.3-70b-versatile",
             messages=[{"role": "system", "content": system_prompt},
                       {"role": "user", "content": prompt}],
             stream=True
@@ -72,5 +72,6 @@ if prompt := st.chat_input("Ask TRINEXA..."):
         
         response = st.write_stream(completion)
     st.session_state.messages.append({"role": "assistant", "content": response})
+
 
 
